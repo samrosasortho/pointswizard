@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Loyalty Points Aggregator (AI Planner + Award Estimator)</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f6f9ff; --card:#ffffff; --ink:#0f172a; --muted:#64748b;
+      --brand:#2563eb; --brand-ink:#ffffff; --ring:#93c5fd; --shadow:0 8px 24px rgba(15,23,42,.08);
+      --radius:16px; --accent:#0ea5e9;
+    }
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0; font-family:Poppins,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial; background:linear-gradient(180deg,#eef4ff,var(--bg) 30%); color:var(--ink); display:flex; align-items:stretch; justify-content:center; padding:24px;}
+    .app{width:100%; max-width:1100px; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden; display:flex; flex-direction:column;}
+    .topbar{background:linear-gradient(90deg,#1d4ed8,#2563eb); color:#fff; padding:18px 22px; display:flex; align-items:center; justify-content:space-between;}
+    .title{font-weight:600; letter-spacing:.2px} .actions{display:flex; gap:10px}
+    .btn{background:var(--brand); color:var(--brand-ink); border:none; border-radius:12px; padding:10px 14px; font-weight:600; cursor:pointer; transition:transform .04s, box-shadow .2s, background .2s; box-shadow:0 6px 16px rgba(37,99,235,.25)}
+    .btn:hover{transform:translateY(-1px)} .btn.secondary{background:#0ea5e9} .btn.ghost{background:transparent; color:#e2e8f0; border:1px solid rgba(255,255,255,.25)}
+    .wrap{padding:22px; display:grid; gap:18px; grid-template-columns:1fr}
+    .panel{background:#fff; border:1px solid #eef2f7; border-radius:14px; padding:18px}
+    .panel h3{margin:0 0 10px 0; font-size:18px}
+    .grid{display:grid; grid-template-columns:1.2fr .8fr .6fr auto; gap:12px; align-items:end}
+    .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    .grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px}
+    .field label{display:block; font-size:12px; color:var(--muted); margin-bottom:6px}
+    select, input, textarea{width:100%; padding:12px 12px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; outline:none; font:inherit; resize:vertical}
+    select:focus, input:focus, textarea:focus{border-color:var(--ring); box-shadow:0 0 0 4px rgba(147,197,253,.35)}
+    .table-card{background:#fff; border:1px solid #eef2f7; border-radius:14px; overflow:hidden}
+    table{width:100%; border-collapse:collapse} thead{background:#f8fafc}
+    th, td{padding:12px 14px; text-align:left; border-bottom:1px solid #f1f5f9; font-size:14px}
+    tbody tr:hover{background:#f8fbff}
+    .chip{display:inline-flex; align-items:center; gap:8px; background:#eff6ff; color:#1d4ed8; padding:6px 10px; border-radius:999px; font-weight:600}
+    .right{display:flex; gap:10px; align-items:center} .danger{background:#ef4444; color:#fff}
+    .muted{color:var(--muted)}
+    .footer{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; padding:16px 0 0}
+    .total{background:#0ea5e9; color:#fff; border-radius:14px; padding:12px 16px; font-weight:700; box-shadow:0 8px 20px rgba(14,165,233,.25)}
+    .note{font-size:12px; color:var(--muted)}
+    .ai-output{background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:12px; white-space:pre-wrap; max-height:360px; overflow:auto}
+    .pill{display:inline-block; padding:6px 10px; border-radius:999px; background:#e2e8f0; color:#0f172a; font-size:12px; font-weight:600; margin-right:8px; margin-top:6px}
+    @media (max-width:900px){ .grid{grid-template-columns:1fr} .grid-2,.grid-3{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Loyalty Points Aggregator">
+    <div class="topbar">
+      <div class="title">Loyalty Points Aggregator</div>
+      <div class="actions">
+        <button class="btn ghost" id="resetAllBtn" title="Clear all entries">Reset</button>
+        <button class="btn secondary" id="downloadBtn" title="Download CSV">Download CSV</button>
+      </div>
+    </div>
+
+    <div class="wrap">
+
+      <!-- Entry Panel -->
+      <div class="panel">
+        <h3>Add your points</h3>
+        <div class="grid" aria-label="Add points form">
+          <div class="field">
+            <label for="program">Program</label>
+            <select id="program">
+              <option>Chase</option><option>Amex</option><option>Capital One</option>
+              <option>Marriott</option><option>Hilton</option>
+              <option>Delta</option><option>United</option><option>Southwest</option><option>American Airlines</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="points">Points</label>
+            <input id="points" type="number" min="0" placeholder="e.g., 45000">
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn" id="addBtn">Add to Dashboard</button>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <div class="note">Values use typical cents-per-point estimates.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Panel -->
+      <div class="panel">
+        <h3>Your balances</h3>
+        <div class="table-card">
+          <table aria-label="Entries table">
+            <thead><tr><th>Program</th><th>Points</th><th>Estimated Value ($)</th><th></th></tr></thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+        <div class="footer">
+          <div class="total" id="totalBox">Total Value: $0.00</div>
+          <div class="note">Estimates (USD per point): Chase/Amex 1.5¢ · CapOne 1.4¢ · Marriott 0.7¢ · Hilton 0.6¢ · Delta/United/AA 1.3¢ · Southwest 1.4¢</div>
+        </div>
+      </div>
+
+      <!-- AI Planner Panel -->
+      <div class="panel">
+        <h3>AI Redemption Planner (offline)</h3>
+        <p class="muted">Describe your goal (e.g., “2 roundtrip flights MIA–JFK in March” or “4 nights at a Marriott in St. Lucia”). This planner uses built-in rules and your balances to suggest high-value strategies.</p>
+        <div class="field">
+          <label for="aiQuery">What do you want to book?</label>
+          <textarea id="aiQuery" rows="3" placeholder="Example: '3 nights at a Hyatt in NYC' or 'Flights to Denver for 2 in February'"></textarea>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:10px">
+          <button class="btn" id="askAiBtn">Ask AI</button>
+          <span class="pill" id="pillBalances"></span>
+          <span class="pill" id="pillStrength"></span>
+        </div>
+        <div id="aiOutput" class="ai-output" style="margin-top:12px" aria-live="polite"></div>
+        <div class="note" style="margin-top:8px">Note: This is a self-contained heuristic engine (no internet). Partners/sweet-spots can change—verify before transferring.</div>
+      </div>
+
+      <!-- Award Estimator Panel -->
+      <div class="panel">
+        <h3>Award Estimator (quick ranges)</h3>
+        <p class="muted">Pick a trip type and I’ll estimate typical award costs and whether your balances cover it. These are rough, program-dependent ranges.</p>
+        <div class="grid-3">
+          <div class="field">
+            <label for="aeType">Type</label>
+            <select id="aeType">
+              <option value="flight">Flight</option>
+              <option value="hotel">Hotel</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="aeRegion">Region</label>
+            <select id="aeRegion">
+              <option value="domestic">Domestic US</option>
+              <option value="caribbean">Caribbean / Mexico</option>
+              <option value="europe">Europe</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="aeClassOrNights">Cabin (flights) / Nights (hotels)</label>
+            <select id="aeClassOrNights">
+              <option value="economy">Economy</option>
+              <option value="business">Business</option>
+              <option value="2">2 nights</option>
+              <option value="3">3 nights</option>
+              <option value="4">4 nights</option>
+              <option value="5">5 nights</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid-2" style="margin-top:10px">
+          <div class="field">
+            <label for="aePeopleOrCat">People (flights) / Hotel Program</label>
+            <select id="aePeopleOrCat">
+              <option value="1">1 person</option>
+              <option value="2">2 people</option>
+              <option value="marriott">Marriott</option>
+              <option value="hilton">Hilton</option>
+              <option value="hyatt">Hyatt (via Chase)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <button class="btn" id="aeEstimateBtn">Estimate Award & Coverage</button>
+          </div>
+        </div>
+        <div id="aeOutput" class="ai-output" style="margin-top:12px" aria-live="polite"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // --- valuation map ---
+    const rates = { "Chase":0.015, "Amex":0.015, "Capital One":0.014, "Marriott":0.007, "Hilton":0.006, "Delta":0.013, "United":0.013, "Southwest":0.014, "American Airlines":0.013 };
+
+    // --- partner hints ---
+    const partners = {
+      flight: { Chase:["United","Southwest"], Amex:["Delta"], "Capital One":["Air Canada (Aeroplan)","Choice/Wyndham (indirect)"] },
+      hotel: { Chase:["Hyatt","Marriott"], Amex:["Hilton","Marriott"], "Capital One":["Wyndham","Choice"] }
+    };
+
+    // --- award range heuristics ---
+    // Values represent typical one-way (economy/business) or per-night, conservative ranges
+    const flightRanges = {
+      domestic: { economy:[7500,15000], business:[25000,35000] },
+      caribbean:{ economy:[12000,25000], business:[30000,50000] },
+      europe:   { economy:[20000,35000], business:[60000,80000] }
+    };
+    const hotelPerNight = {
+      hyatt:[5000,20000],      // Cat 1-4 rough
+      marriott:[15000,50000],  // wide variance
+      hilton:[20000,80000]     // wide variance
+    };
+
+    // ---- state/persistence ----
+    const STORAGE_KEY = "lpa_manual_entries_v1"; let entries = [];
+    const rowsEl = document.getElementById("rows"); const totalBox = document.getElementById("totalBox");
+    const programEl = document.getElementById("program"); const pointsEl = document.getElementById("points");
+    const addBtn = document.getElementById("addBtn"); const resetAllBtn = document.getElementById("resetAllBtn"); const downloadBtn = document.getElementById("downloadBtn");
+
+    const aiQueryEl = document.getElementById("aiQuery"); const askAiBtn = document.getElementById("askAiBtn"); const aiOutputEl = document.getElementById("aiOutput");
+    const pillBalances = document.getElementById("pillBalances"); const pillStrength = document.getElementById("pillStrength");
+
+    const aeType = document.getElementById("aeType"); const aeRegion = document.getElementById("aeRegion"); const aeClassOrNights = document.getElementById("aeClassOrNights");
+    const aePeopleOrCat = document.getElementById("aePeopleOrCat"); const aeEstimateBtn = document.getElementById("aeEstimateBtn"); const aeOutput = document.getElementById("aeOutput");
+
+    function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); }catch(e){} }
+    function load(){ try{ const raw=localStorage.getItem(STORAGE_KEY); if(raw){ entries=JSON.parse(raw)||[]; } }catch(e){ entries=[]; } }
+    function currency(n){ return n.toLocaleString(undefined,{style:"currency",currency:"USD"}); }
+    function computeValue(program, points){ const rate=rates[program]??0; return (points*rate); }
+
+    function render(){
+      rowsEl.innerHTML=""; let total=0;
+      entries.forEach((e,idx)=>{
+        const tr=document.createElement("tr"); const val=computeValue(e.program,e.points); total+=val;
+        tr.innerHTML = `<td><span class="chip">${e.program}</span></td><td>${Number(e.points).toLocaleString()}</td><td><strong>${currency(val)}</strong></td><td class="right"><button class="btn danger" data-del="${idx}">Delete</button></td>`;
+        rowsEl.appendChild(tr);
+      });
+      totalBox.textContent = `Total Value: ${currency(total)}`;
+      updatePills(); save();
+    }
+    function addEntry(){
+      const program=programEl.value; const points=Number(pointsEl.value);
+      if(!Number.isFinite(points)||points<=0){ alert("Please enter a positive number of points."); pointsEl.focus(); return; }
+      entries.push({program,points}); pointsEl.value=""; render(); pointsEl.focus();
+    }
+    function deleteEntry(i){ entries.splice(i,1); render(); }
+    function downloadCSV(){
+      const header=["Program","Points","EstimatedValueUSD"]; const lines=[header.join(",")];
+      entries.forEach(e=>{ const val=computeValue(e.program,e.points); lines.push([e.program,e.points,val.toFixed(2)].join(",")); });
+      const blob=new Blob([lines.join("\n")],{type:"text/csv"}); const url=URL.createObjectURL(blob);
+      const a=document.createElement("a"); a.href=url; a.download="loyalty-points-aggregator.csv"; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    }
+
+    // helpers
+    function sumByProgram(name){ return entries.filter(e=>e.program===name).reduce((a,b)=>a+Number(b.points||0),0); }
+    function bankTotals(){ return { chase:sumByProgram("Chase"), amex:sumByProgram("Amex"), cap1:sumByProgram("Capital One") }; }
+    function airlineTotals(){ return { delta:sumByProgram("Delta"), united:sumByProgram("United"), southwest:sumByProgram("Southwest"), aa:sumByProgram("American Airlines") }; }
+    function hotelTotals(){ return { marriott:sumByProgram("Marriott"), hilton:sumByProgram("Hilton") }; }
+
+    function updatePills(){
+      const b=bankTotals(), a=airlineTotals(), h=hotelTotals();
+      pillBalances.textContent = `Balances – Banks: C${b.chase.toLocaleString()} · A${b.amex.toLocaleString()} · C1 ${b.cap1.toLocaleString()} | Airlines: UA ${a.united.toLocaleString()} · DL ${a.delta.toLocaleString()} · WN ${a.southwest.toLocaleString()} · AA ${a.aa.toLocaleString()} | Hotels: Marriott ${h.marriott.toLocaleString()} · Hilton ${h.hilton.toLocaleString()}`;
+      const strength=(b.chase*0.015+b.amex*0.015+b.cap1*0.014); let tier="Starter"; if(strength>800) tier="Strong"; if(strength>1600) tier="Power"; pillStrength.textContent=`Wallet Strength: ${tier}`;
+    }
+
+    function containsAny(text, arr){ const t=text.toLowerCase(); return arr.some(k=>t.includes(k)); }
+    function planRedemption(query){
+      const q=(query||"").trim().toLowerCase();
+      const b=bankTotals(), a=airlineTotals(), h=hotelTotals();
+      const totalValUSD=(b.chase*0.015+b.amex*0.015+b.cap1*0.014+a.delta*0.013+a.united*0.013+a.southwest*0.014+a.aa*0.013+h.marriott*0.007+h.hilton*0.006);
+      const wantsFlight=containsAny(q,["flight","fly","air","route","one-way","roundtrip","rt"]);
+      const wantsHotel=containsAny(q,["hotel","stay","night","marriott","hilton","hyatt","resort"]);
+      const cityHints=containsAny(q,["mia","fll","jfk","lga","atl","den","lax","sfo","ord","dfw","phx","bos","sea","europe","caribbean","st. lucia","st lucia","greece","santorini","mexico","cancun"]);
+      const lines=[];
+      lines.push(`Your estimated wallet value: ${currency(totalValUSD)} (typical cents-per-point).`);
+      if(wantsHotel){
+        if(b.chase>=30000){ lines.push("• Use **Chase → Hyatt** for strong hotel value. Check Hyatt first."); }
+        else if(h.marriott>=35000 || b.chase>=35000){ lines.push("• Consider **Marriott** awards; top up with **Chase → Marriott** if needed (moderate value)."); }
+        if(h.hilton>=40000 || b.amex>=40000){ lines.push("• For Hilton, consider **Amex → Hilton** to hit free-night thresholds (lower value but broad availability)."); }
+      }
+      if(wantsFlight){
+        if(a.united>=10000 || b.chase>=30000){ lines.push("• For Star Alliance, book with **United**. Top-up via **Chase → United** if needed."); }
+        if(a.southwest>=8000 || b.chase>=20000){ lines.push("• For domestic/Caribbean, **Southwest** is flexible; **Chase → Southwest** works well."); }
+        if(a.delta>=10000 || b.amex>=30000){ lines.push("• For Delta, **Amex → Delta** to top up; watch for award sales."); }
+        if(a.aa>0){ lines.push("• You already have **AA** miles—use them for oneworld routes (no direct Amex/Chase transfer to AA)."); }
+      }
+      if(cityHints){ lines.push("• Destination hint detected—compare cash vs points; sometimes bank portal beats transfers."); }
+      const hasBank=(b.chase+b.amex+b.cap1)>0, hasAir=(a.delta+a.united+a.southwest+a.aa)>0, hasHotel=(h.marriott+h.hilton)>0;
+      if(hasBank && hasAir){ lines.push("• **Blend banks + airlines**: move bank points into the airline where you already have a balance to reach a single workable total."); }
+      if(hasBank && hasHotel){ lines.push("• **Blend banks + hotels**: prioritize higher-value partners (often Hyatt) before topping up lower-value programs."); }
+      lines.push("• Verify award space first, then transfer. Most bank transfers are one-way.");
+      if(!wantsFlight && !wantsHotel){ lines.push("• Try: “3 nights at a Hyatt in NYC” or “Two roundtrips MIA–JFK in March”."); }
+      return lines.join("\n");
+    }
+    function askAI(){ aiOutputEl.textContent = planRedemption(aiQueryEl.value); }
+
+    // Award Estimator logic
+    function aeEstimate(){
+      const type=aeType.value, region=aeRegion.value, classOrN=aeClassOrNights.value, pplOrProg=aePeopleOrCat.value;
+      const b=bankTotals(), a=airlineTotals(), h=hotelTotals();
+      const lines=[];
+
+      if(type==="flight"){
+        const clazz=(classOrN==="business"?"business":"economy");
+        const people = (pplOrProg==="1"||pplOrProg==="2") ? Number(pplOrProg) : 1;
+        const [minEach, maxEach] = flightRanges[region][clazz];
+        const neededMin = minEach * people * 2; // roundtrip
+        const neededMax = maxEach * people * 2;
+
+        lines.push(`Flight estimate (${clazz}, ${region}, roundtrip, ${people} pax): ~ ${minEach.toLocaleString()}–${maxEach.toLocaleString()} miles each way per person.`);
+        lines.push(`Total needed: ~ ${neededMin.toLocaleString()}–${neededMax.toLocaleString()} miles.`);
+
+        // coverage check by airline buckets + bank top-ups
+        const airlineBuckets = [
+          ["United", a.united, b.chase],   // Chase top-up
+          ["Delta", a.delta, b.amex],     // Amex top-up
+          ["Southwest", a.southwest, b.chase],
+          ["American Airlines", a.aa, 0]  // no direct bank top-up (in this simple model)
+        ];
+
+        airlineBuckets.forEach(([name, miles, bankTopup])=>{
+          const canCoverMin = miles >= neededMin;
+          const shortfall = Math.max(0, neededMin - miles);
+          let suggestion = `– ${name}: you have ${miles.toLocaleString()} miles.`;
+          if(canCoverMin){
+            suggestion += ` Likely enough for the low end.`;
+          } else if(shortfall>0){
+            if(name==="United" && bankTopup>0) suggestion += ` Short by ~${shortfall.toLocaleString()}. Consider **Chase → United** transfer.`;
+            else if(name==="Delta" && bankTopup>0) suggestion += ` Short by ~${shortfall.toLocaleString()}. Consider **Amex → Delta** transfer.`;
+            else if(name==="Southwest" && bankTopup>0) suggestion += ` Short by ~${shortfall.toLocaleString()}. Consider **Chase → Southwest** transfer.`;
+            else suggestion += ` Short by ~${shortfall.toLocaleString()}. Consider another airline or paying cash.`;
+          }
+          lines.push(suggestion);
+        });
+      } else {
+        // hotel
+        const nights = isNaN(Number(classOrN)) ? 3 : Number(classOrN);
+        const program = (pplOrProg==="marriott"||pplOrProg==="hilton"||pplOrProg==="hyatt") ? pplOrProg : "marriott";
+        const [minNight, maxNight] = hotelPerNight[program];
+        const neededMin = minNight * nights;
+        const neededMax = maxNight * nights;
+        lines.push(`Hotel estimate (${program}, ${nights} nights): ~ ${minNight.toLocaleString()}–${maxNight.toLocaleString()} points per night.`);
+        lines.push(`Total needed: ~ ${neededMin.toLocaleString()}–${neededMax.toLocaleString()} points.`);
+
+        const have = program==="marriott" ? h.marriott : (program==="hilton" ? h.hilton : b.chase); // hyatt via Chase
+        const label = program==="hyatt" ? "Chase (to transfer to Hyatt)" : program.capitalize?.() || program;
+        const canCoverMin = have >= neededMin;
+        const shortfall = Math.max(0, neededMin - have);
+        lines.push(`You have ${have.toLocaleString()} ${label} points.`);
+        if(canCoverMin){
+          lines.push("Likely enough for lower-end of the range.");
+        } else {
+          if(program==="hyatt"){ lines.push(`Short by ~${shortfall.toLocaleString()}. Earn/transfer more **Chase** before booking.`); }
+          else if(program==="marriott"){ lines.push(`Short by ~${shortfall.toLocaleString()}. Consider topping up via **Chase → Marriott** or adjusting category.`); }
+          else if(program==="hilton"){ lines.push(`Short by ~${shortfall.toLocaleString()}. Consider **Amex → Hilton** or lower-category property.`); }
+        }
+      }
+
+      lines.push("Tip: Always confirm award space and total taxes/fees before transferring bank points (transfers are typically one-way).");
+      aeOutput.textContent = lines.join("\n");
+    }
+
+    // Events
+    addBtn.addEventListener("click", addEntry);
+    pointsEl.addEventListener("keydown", (e)=>{ if(e.key==="Enter") addEntry(); });
+    rowsEl.addEventListener("click", (e)=>{ const btn=e.target.closest("button[data-del]"); if(btn){ const idx=Number(btn.getAttribute("data-del")); deleteEntry(idx); } });
+    resetAllBtn.addEventListener("click", ()=>{ if(confirm("Clear all entries?")){ entries=[]; render(); } });
+    downloadBtn.addEventListener("click", downloadCSV);
+    askAiBtn.addEventListener("click", askAI);
+    aeEstimateBtn.addEventListener("click", aeEstimate);
+
+    // Init
+    load(); render();
+  </script>
+</body>
+</html>
